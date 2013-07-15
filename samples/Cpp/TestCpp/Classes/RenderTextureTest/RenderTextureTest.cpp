@@ -627,9 +627,9 @@ void SpriteRenderTextureBug::SimpleSprite::draw()
 {
     if (rt == NULL)
     {
-		CCSize s = CCDirector::sharedDirector()->getWinSize();
-        rt = new CCRenderTexture();
-        rt->initWithWidthAndHeight(s.width, s.height, kCCTexture2DPixelFormat_RGBA8888);
+        CCSize s = CCDirector::sharedDirector()->getWinSize();
+        rt = CCRenderTexture::create(s.width, s.height, kCCTexture2DPixelFormat_RGBA8888);
+        rt->retain();
 	}
 	rt->beginWithClear(0.0f, 0.0f, 0.0f, 1.0f);
 	rt->end();

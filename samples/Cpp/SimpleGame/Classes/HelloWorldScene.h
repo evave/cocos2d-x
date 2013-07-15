@@ -35,6 +35,8 @@ public:
     
     
 protected:
+    cocos2d::CCSprite *adreno_getPlayerSprite();
+
 	cocos2d::CCArray *_targets;
 	cocos2d::CCArray *_projectiles;
 	int _projectilesDestroyed;

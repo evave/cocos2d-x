@@ -93,7 +93,7 @@ bool HelloWorld::init()
 
 		/////////////////////////////
 		// 2. add your codes below...
-		CCSprite *player = CCSprite::create("Player.png", CCRectMake(0, 0, 27, 40) );
+        CCSprite *player = adreno_getPlayerSprite();
         
 		player->setPosition( ccp(origin.x + player->getContentSize().width/2,
                                  origin.y + visibleSize.height/2) );
@@ -237,7 +237,52 @@ void HelloWorld::ccTouchesEnded(CCSet* touches, CCEvent* event)
 	projectile->setTag(2);
 	_projectiles->addObject(projectile);
 
-	CocosDenshion::SimpleAudioEngine::sharedEngine()->playEffect("pew-pew-lei.wav");
+    CocosDenshion::SimpleAudioEngine::sharedEngine()->playEffect("pew-pew-lei.wav");
+}
+
+CCSprite *HelloWorld::adreno_getPlayerSprite()
+{
+    CCFileUtils *fu = CCFileUtils::sharedFileUtils();
+    const std::string path = fu->getWritablePath() + "RTPlayer.png";
+    {
+        ccColor4B whiteColor;
+        whiteColor.a = 255;
+        whiteColor.r = 255;
+        whiteColor.g = 255;
+        whiteColor.b = 255;
+        ccColor4B blueColor;
+        blueColor.a = 255;
+        blueColor.r = 30;
+        blueColor.g = 120;
+        blueColor.b = 240;
+        ccColor4B redColor;
+        redColor.a = 255;
+        redColor.r = 240;
+        redColor.g = 30;
+        redColor.b = 120;
+
+        CCSprite *player = CCSprite::create("Player.png", CCRectMake(0, 0, 27, 40) );
+        player->setAnchorPoint(ccp(0, 0));
+        player->setScale(2.0);
+        CCLayerColor *whiteBlob = CCLayerColor::create(whiteColor, 30, 6);
+        whiteBlob->setPosition(10, 40);
+        CCLayerColor *blueBlob = CCLayerColor::create(blueColor, 30, 6);
+        blueBlob->setPosition(10, 34);
+        CCLayerColor *redBlob = CCLayerColor::create(redColor, 30, 6);
+        redBlob->setPosition(10, 28);
+
+        CCRenderTexture *rt = CCRenderTexture::create(56, 80, CCRenderTextureUsage_SaveToFile);
+        rt->beginWithClear(0.0, 0.0, 0.0, 0.0);
+        player->visit();
+        whiteBlob->visit();
+        blueBlob->visit();
+        redBlob->visit();
+        rt->end();
+        if (!rt->saveToFile("RTPlayer.png", kCCImageFormatPNG)) {
+            CCLOG("Failed to save image to file: '%s'", path.c_str());
+        }
+    }
+    return CCSprite::create(path.c_str(), CCRectMake(0, 0, 56, 80));
 }
 
 void HelloWorld::updateGame(float dt)
