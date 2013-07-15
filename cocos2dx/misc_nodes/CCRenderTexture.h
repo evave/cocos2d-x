@@ -29,6 +29,11 @@ THE SOFTWARE.
 #include "sprite_nodes/CCSprite.h"
 #include "kazmath/mat4.h"
 
+#if CC_TARGET_PLATFORM == CC_PLATFORM_ANDROID
+#include "AndroidGraphicBuffer.h"
+#include <memory>
+#endif
+
 NS_CC_BEGIN
 
 /**
@@ -41,6 +46,12 @@ typedef enum eImageFormat
     kCCImageFormatJPEG      = 0,
     kCCImageFormatPNG       = 1,
 } tCCImageFormat;
+
+enum CCRenderTextureUsage {
+    CCRenderTextureUsage_Display,
+    CCRenderTextureUsage_SaveToFile
+};
+
 /**
 @brief CCRenderTexture is a generic rendering target. To render things into it,
 simply construct a render target, call begin on it, call visit on any cocos
@@ -51,7 +62,7 @@ There are also functions for saving the render texture to disk in PNG or JPG for
 
 @since v0.8.1
 */
-class CC_DLL CCRenderTexture : public CCNode 
+class CC_DLL CCRenderTexture : public CCNode
 {
     /** The CCSprite being used.
     The sprite, by default, will use the following blending function: GL_ONE, GL_ONE_MINUS_SRC_ALPHA.
@@ -62,24 +73,24 @@ class CC_DLL CCRenderTexture : public CCNode
 public:
     CCRenderTexture();
     virtual ~CCRenderTexture();
-    
+
     virtual void visit();
     virtual void draw();
 
     /** initializes a RenderTexture object with width and height in Points and a pixel format( only RGB and RGBA formats are valid ) and depthStencil format*/
-    static CCRenderTexture * create(int w ,int h, CCTexture2DPixelFormat eFormat, GLuint uDepthStencilFormat);
+    static CCRenderTexture * create(int w ,int h, CCTexture2DPixelFormat eFormat, GLuint uDepthStencilFormat, CCRenderTextureUsage usage = CCRenderTextureUsage_Display);
 
     /** creates a RenderTexture object with width and height in Points and a pixel format, only RGB and RGBA formats are valid */
-    static CCRenderTexture * create(int w, int h, CCTexture2DPixelFormat eFormat);
+    static CCRenderTexture * create(int w, int h, CCTexture2DPixelFormat eFormat, CCRenderTextureUsage usage = CCRenderTextureUsage_Display);
 
     /** creates a RenderTexture object with width and height in Points, pixel format is RGBA8888 */
-    static CCRenderTexture * create(int w, int h);
+    static CCRenderTexture * create(int w, int h, CCRenderTextureUsage usage = CCRenderTextureUsage_Display);
 
     /** initializes a RenderTexture object with width and height in Points and a pixel format, only RGB and RGBA formats are valid */
-    bool initWithWidthAndHeight(int w, int h, CCTexture2DPixelFormat eFormat);
+    bool initWithWidthAndHeight(int w, int h, CCTexture2DPixelFormat eFormat, CCRenderTextureUsage usage);
 
     /** initializes a RenderTexture object with width and height in Points and a pixel format( only RGB and RGBA formats are valid ) and depthStencil format*/
-    bool initWithWidthAndHeight(int w, int h, CCTexture2DPixelFormat eFormat, GLuint uDepthStencilFormat);
+    bool initWithWidthAndHeight(int w, int h, CCTexture2DPixelFormat eFormat, GLuint uDepthStencilFormat, CCRenderTextureUsage usage);
 
     /** starts grabbing */
     void begin();
@@ -101,7 +112,6 @@ public:
 
     /** ends grabbing*/
     void end();
-
     /** clears the texture with a color */
     void clear(float r, float g, float b, float a);
 
@@ -124,33 +134,33 @@ public:
         Returns YES if the operation is successful.
      */
     bool saveToFile(const char *name, tCCImageFormat format);
-    
+
     /** Listen "come to background" message, and save render texture.
      It only has effect on Android.
      */
     void listenToBackground(CCObject *obj);
-    
+
     /** Listen "come to foreground" message and restore the frame buffer object
      It only has effect on Android.
      */
     void listenToForeground(CCObject *obj);
-    
+
     /** Valid flags: GL_COLOR_BUFFER_BIT, GL_DEPTH_BUFFER_BIT, GL_STENCIL_BUFFER_BIT. They can be OR'ed. Valid when "autoDraw is YES. */
     unsigned int getClearFlags() const;
     void setClearFlags(unsigned int uClearFlags);
-    
+
     /** Clear color value. Valid only when "autoDraw" is true. */
     const ccColor4F& getClearColor() const;
     void setClearColor(const ccColor4F &clearColor);
-    
+
     /** Value for clearDepth. Valid only when autoDraw is true. */
     float getClearDepth() const;
     void setClearDepth(float fClearDepth);
-    
+
     /** Value for clear Stencil. Valid only when autoDraw is true */
     int getClearStencil() const;
     void setClearStencil(float fClearStencil);
-    
+
     /** When enabled, it will render its children into the texture automatically. Disabled by default for compatiblity reasons.
      Will be enabled in the future.
      */
@@ -167,14 +177,18 @@ protected:
     CCTexture2D* m_pTexture;
     CCTexture2D* m_pTextureCopy;    // a copy of m_pTexture
     CCImage*     m_pUITextureImage;
-    GLenum       m_ePixelFormat;
-    
+    CCTexture2DPixelFormat m_ePixelFormat;
+
     // code for "auto" update
     GLbitfield   m_uClearFlags;
     ccColor4F    m_sClearColor;
     GLclampf     m_fClearDepth;
     GLint        m_nClearStencil;
     bool         m_bAutoDraw;
+
+#if CC_TARGET_PLATFORM == CC_PLATFORM_ANDROID
+    std::shared_ptr<AndroidGraphicBuffer> m_androidBuffer;
+#endif
 };
 
 // end of textures group

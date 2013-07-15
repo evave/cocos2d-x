@@ -41,7 +41,57 @@ THE SOFTWARE.
 // extern
 #include "kazmath/GL/matrix.h"
 
+#include <errno.h>
+
 NS_CC_BEGIN
+
+#if CC_TARGET_PLATFORM == CC_PLATFORM_ANDROID
+namespace {
+    class PrivateGraphicsBufferLocker
+    {
+    public:
+        PrivateGraphicsBufferLocker(const std::shared_ptr<AndroidGraphicBuffer> &buffer)
+            : m_buffer(buffer)
+            , m_isLocked(false)
+        {
+        }
+
+        ~PrivateGraphicsBufferLocker()
+        {
+            unlock();
+        }
+
+        GLubyte *lock()
+        {
+            unsigned char *vaddr = nullptr;
+            if (!m_isLocked && m_buffer) {
+                int result = 0;
+                while ((result = m_buffer->Lock(AndroidGraphicBuffer::UsageSoftwareRead, &vaddr)) == -EBUSY) {
+                    usleep(1000); // 1 millisecond.
+                }
+
+                if (result != 0 || vaddr == nullptr) {
+                    m_buffer->Unlock();
+                    return nullptr;
+                }
+                m_isLocked = true;
+                return (GLubyte *)vaddr;
+            }
+            return nullptr;
+        }
+
+    private:
+        void unlock()
+        {
+            if (m_isLocked)
+                m_buffer->Unlock();
+        }
+
+        std::shared_ptr<AndroidGraphicBuffer> m_buffer;
+        bool m_isLocked;
+    };
+}
+#endif
 
 // implementation CCRenderTexture
 CCRenderTexture::CCRenderTexture()
@@ -66,7 +116,7 @@ CCRenderTexture::CCRenderTexture()
                                                                   callfuncO_selector(CCRenderTexture::listenToBackground),
                                                                   EVENT_COME_TO_BACKGROUND,
                                                                   NULL);
-    
+
     CCNotificationCenter::sharedNotificationCenter()->addObserver(this,
                                                                   callfuncO_selector(CCRenderTexture::listenToForeground),
                                                                   EVNET_COME_TO_FOREGROUND, // this is misspelt
@@ -78,7 +128,7 @@ CCRenderTexture::~CCRenderTexture()
 {
     CC_SAFE_RELEASE(m_pSprite);
     CC_SAFE_RELEASE(m_pTextureCopy);
-    
+
     glDeleteFramebuffers(1, &m_uFBO);
     if (m_uDepthRenderBufffer)
     {
@@ -96,7 +146,7 @@ void CCRenderTexture::listenToBackground(cocos2d::CCObject *obj)
 {
 #if CC_ENABLE_CACHE_TEXTURE_DATA
     CC_SAFE_DELETE(m_pUITextureImage);
-    
+
     // to get the rendered texture data
     m_pUITextureImage = newCCImage(false);
 
@@ -104,7 +154,7 @@ void CCRenderTexture::listenToBackground(cocos2d::CCObject *obj)
     {
         const CCSize& s = m_pTexture->getContentSizeInPixels();
         VolatileTexture::addDataTexture(m_pTexture, m_pUITextureImage->getData(), kTexture2DPixelFormat_RGBA8888, s);
-        
+
         if ( m_pTextureCopy )
         {
             VolatileTexture::addDataTexture(m_pTextureCopy, m_pUITextureImage->getData(), kTexture2DPixelFormat_RGBA8888, s);
@@ -114,7 +164,7 @@ void CCRenderTexture::listenToBackground(cocos2d::CCObject *obj)
     {
         CCLOG("Cache rendertexture failed!");
     }
-    
+
     glDeleteFramebuffers(1, &m_uFBO);
     m_uFBO = 0;
 #endif
@@ -125,17 +175,17 @@ void CCRenderTexture::listenToForeground(cocos2d::CCObject *obj)
 #if CC_ENABLE_CACHE_TEXTURE_DATA
     // -- regenerate frame buffer object and attach the texture
     glGetIntegerv(GL_FRAMEBUFFER_BINDING, &m_nOldFBO);
-    
+
     glGenFramebuffers(1, &m_uFBO);
     glBindFramebuffer(GL_FRAMEBUFFER, m_uFBO);
-    
+
     m_pTexture->setAliasTexParameters();
-    
+
     if ( m_pTextureCopy )
     {
         m_pTextureCopy->setAliasTexParameters();
     }
-    
+
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, m_pTexture->getName(), 0);
     glBindFramebuffer(GL_FRAMEBUFFER, m_nOldFBO);
 #endif
@@ -203,11 +253,11 @@ void CCRenderTexture::setAutoDraw(bool bAutoDraw)
     m_bAutoDraw = bAutoDraw;
 }
 
-CCRenderTexture * CCRenderTexture::create(int w, int h, CCTexture2DPixelFormat eFormat)
+CCRenderTexture * CCRenderTexture::create(int w, int h, CCTexture2DPixelFormat eFormat, CCRenderTextureUsage usage)
 {
     CCRenderTexture *pRet = new CCRenderTexture();
 
-    if(pRet && pRet->initWithWidthAndHeight(w, h, eFormat))
+    if(pRet && pRet->initWithWidthAndHeight(w, h, eFormat, usage))
     {
         pRet->autorelease();
         return pRet;
@@ -216,11 +266,11 @@ CCRenderTexture * CCRenderTexture::create(int w, int h, CCTexture2DPixelFormat e
     return NULL;
 }
 
-CCRenderTexture * CCRenderTexture::create(int w ,int h, CCTexture2DPixelFormat eFormat, GLuint uDepthStencilFormat)
+CCRenderTexture * CCRenderTexture::create(int w ,int h, CCTexture2DPixelFormat eFormat, GLuint uDepthStencilFormat, CCRenderTextureUsage usage)
 {
     CCRenderTexture *pRet = new CCRenderTexture();
 
-    if(pRet && pRet->initWithWidthAndHeight(w, h, eFormat, uDepthStencilFormat))
+    if(pRet && pRet->initWithWidthAndHeight(w, h, eFormat, uDepthStencilFormat, usage))
     {
         pRet->autorelease();
         return pRet;
@@ -229,11 +279,11 @@ CCRenderTexture * CCRenderTexture::create(int w ,int h, CCTexture2DPixelFormat e
     return NULL;
 }
 
-CCRenderTexture * CCRenderTexture::create(int w, int h)
+CCRenderTexture * CCRenderTexture::create(int w, int h, CCRenderTextureUsage usage)
 {
     CCRenderTexture *pRet = new CCRenderTexture();
 
-    if(pRet && pRet->initWithWidthAndHeight(w, h, kCCTexture2DPixelFormat_RGBA8888, 0))
+    if(pRet && pRet->initWithWidthAndHeight(w, h, kCCTexture2DPixelFormat_RGBA8888, 0, usage))
     {
         pRet->autorelease();
         return pRet;
@@ -242,18 +292,18 @@ CCRenderTexture * CCRenderTexture::create(int w, int h)
     return NULL;
 }
 
-bool CCRenderTexture::initWithWidthAndHeight(int w, int h, CCTexture2DPixelFormat eFormat)
+bool CCRenderTexture::initWithWidthAndHeight(int w, int h, CCTexture2DPixelFormat eFormat, CCRenderTextureUsage usage)
 {
-    return initWithWidthAndHeight(w, h, eFormat, 0);
+    return initWithWidthAndHeight(w, h, eFormat, 0, usage);
 }
 
-bool CCRenderTexture::initWithWidthAndHeight(int w, int h, CCTexture2DPixelFormat eFormat, GLuint uDepthStencilFormat)
+bool CCRenderTexture::initWithWidthAndHeight(int w, int h, CCTexture2DPixelFormat eFormat, GLuint uDepthStencilFormat, CCRenderTextureUsage usage)
 {
     CCAssert(eFormat != kCCTexture2DPixelFormat_A8, "only RGB and RGBA formats are valid for a render texture");
 
     bool bRet = false;
     void *data = NULL;
-    do 
+    do
     {
         w = (int)(w * CC_CONTENT_SCALE_FACTOR());
         h = (int)(h * CC_CONTENT_SCALE_FACTOR());
@@ -275,6 +325,23 @@ bool CCRenderTexture::initWithWidthAndHeight(int w, int h, CCTexture2DPixelForma
             powH = ccNextPOT(h);
         }
 
+#if CC_TARGET_PLATFORM == CC_PLATFORM_ANDROID
+        if (usage == CCRenderTextureUsage_SaveToFile && eFormat == kCCTexture2DPixelFormat_RGBA8888) {
+            const std::string glVendor = (const char *)glGetString(GL_VENDOR);
+            std::string deviceModel;
+            if (!AndroidGraphicBuffer::IsBlacklisted(deviceModel) && glVendor == "Qualcomm") {
+                const uint32_t usage = AndroidGraphicBuffer::UsageTexture | AndroidGraphicBuffer::Usage2D
+                        | AndroidGraphicBuffer::UsageSoftwareRead | AndroidGraphicBuffer::UsageSoftwareWrite;
+                m_androidBuffer.reset(new AndroidGraphicBuffer(powW, powH, usage, eFormat));
+                CCLOG("Samsung S3 tweak: gralloc available for this device (model '%s', GLES vendor '%s').",
+                      deviceModel.c_str(), glVendor.c_str());
+            } else {
+                CCLOG("Samsung S3 tweak: should not use gralloc for this device (model '%s', GLES vendor '%s'), fallback to glReadPixels.",
+                      deviceModel.c_str(), glVendor.c_str());
+            }
+        }
+#endif
+
         data = malloc((int)(powW * powH * 4));
         CC_BREAK_IF(! data);
 
@@ -284,7 +351,7 @@ bool CCRenderTexture::initWithWidthAndHeight(int w, int h, CCTexture2DPixelForma
         m_pTexture = new CCTexture2D();
         if (m_pTexture)
         {
-            m_pTexture->initWithData(data, (CCTexture2DPixelFormat)m_ePixelFormat, powW, powH, CCSizeMake((float)w, (float)h));
+            m_pTexture->initWithData(data, m_ePixelFormat, powW, powH, CCSizeMake((float)w, (float)h));
         }
         else
         {
@@ -292,13 +359,13 @@ bool CCRenderTexture::initWithWidthAndHeight(int w, int h, CCTexture2DPixelForma
         }
         GLint oldRBO;
         glGetIntegerv(GL_RENDERBUFFER_BINDING, &oldRBO);
-        
+
         if (CCConfiguration::sharedConfiguration()->checkForGLExtension("GL_QCOM"))
         {
             m_pTextureCopy = new CCTexture2D();
             if (m_pTextureCopy)
             {
-                m_pTextureCopy->initWithData(data, (CCTexture2DPixelFormat)m_ePixelFormat, powW, powH, CCSizeMake((float)w, (float)h));
+                m_pTextureCopy->initWithData(data, m_ePixelFormat, powW, powH, CCSizeMake((float)w, (float)h));
             }
             else
             {
@@ -344,28 +411,33 @@ bool CCRenderTexture::initWithWidthAndHeight(int w, int h, CCTexture2DPixelForma
 
         glBindRenderbuffer(GL_RENDERBUFFER, oldRBO);
         glBindFramebuffer(GL_FRAMEBUFFER, m_nOldFBO);
-        
+
+#if CC_TARGET_PLATFORM == CC_PLATFORM_ANDROID
+        if (m_androidBuffer)
+            m_androidBuffer->Bind();
+#endif
+
         // Diabled by default.
         m_bAutoDraw = false;
-        
+
         // add sprite for backward compatibility
         addChild(m_pSprite);
-        
+
         bRet = true;
     } while (0);
-    
+
     CC_SAFE_FREE(data);
-    
+
     return bRet;
 }
 
 void CCRenderTexture::begin()
 {
     kmGLMatrixMode(KM_GL_PROJECTION);
-	kmGLPushMatrix();
-	kmGLMatrixMode(KM_GL_MODELVIEW);
     kmGLPushMatrix();
-    
+    kmGLMatrixMode(KM_GL_MODELVIEW);
+    kmGLPushMatrix();
+
     CCDirector *director = CCDirector::sharedDirector();
     director->setProjection(director->getProjection());
 
@@ -387,7 +459,7 @@ void CCRenderTexture::begin()
 
     glGetIntegerv(GL_FRAMEBUFFER_BINDING, &m_nOldFBO);
     glBindFramebuffer(GL_FRAMEBUFFER, m_uFBO);
-    
+
     /*  Certain Qualcomm Andreno gpu's will retain data in memory after a frame buffer switch which corrupts the render to the texture. The solution is to clear the frame buffer before rendering to the texture. However, calling glClear has the unintended result of clearing the current texture. Create a temporary texture to overcome this. At the end of CCRenderTexture::begin(), switch the attached texture to the second one, call glClear, and then switch back to the original texture. This solution is unnecessary for other devices as they don't have the same issue with switching frame buffers.
      */
     if (CCConfiguration::sharedConfiguration()->checkForGLExtension("GL_QCOM"))
@@ -423,13 +495,13 @@ void CCRenderTexture::beginWithClear(float r, float g, float b, float a, float d
     GLfloat	clearColor[4] = {0.0f};
     GLfloat depthClearValue = 0.0f;
     int stencilClearValue = 0;
-    
+
     if (flags & GL_COLOR_BUFFER_BIT)
     {
         glGetFloatv(GL_COLOR_CLEAR_VALUE,clearColor);
         glClearColor(r, g, b, a);
     }
-    
+
     if (flags & GL_DEPTH_BUFFER_BIT)
     {
         glGetFloatv(GL_DEPTH_CLEAR_VALUE, &depthClearValue);
@@ -441,7 +513,7 @@ void CCRenderTexture::beginWithClear(float r, float g, float b, float a, float d
         glGetIntegerv(GL_STENCIL_CLEAR_VALUE, &stencilClearValue);
         glClearStencil(stencilValue);
     }
-    
+
     glClear(flags);
 
     // restore
@@ -462,16 +534,16 @@ void CCRenderTexture::beginWithClear(float r, float g, float b, float a, float d
 void CCRenderTexture::end()
 {
     CCDirector *director = CCDirector::sharedDirector();
-    
+
     glBindFramebuffer(GL_FRAMEBUFFER, m_nOldFBO);
 
     // restore viewport
     director->setViewport();
 
     kmGLMatrixMode(KM_GL_PROJECTION);
-	kmGLPopMatrix();
-	kmGLMatrixMode(KM_GL_MODELVIEW);
-	kmGLPopMatrix();
+    kmGLPopMatrix();
+    kmGLMatrixMode(KM_GL_MODELVIEW);
+    kmGLPopMatrix();
 }
 
 void CCRenderTexture::clear(float r, float g, float b, float a)
@@ -511,30 +583,30 @@ void CCRenderTexture::clearStencil(int stencilValue)
 void CCRenderTexture::visit()
 {
     // override visit.
-	// Don't call visit on its children
+    // Don't call visit on its children
     if (!m_bVisible)
     {
         return;
     }
-	
-	kmGLPushMatrix();
-	
+
+    kmGLPushMatrix();
+
     if (m_pGrid && m_pGrid->isActive())
     {
         m_pGrid->beforeDraw();
         transformAncestors();
     }
-    
+
     transform();
     m_pSprite->visit();
     draw();
-	
+
     if (m_pGrid && m_pGrid->isActive())
     {
         m_pGrid->afterDraw(this);
     }
-	
-	kmGLPopMatrix();
+
+    kmGLPopMatrix();
 
     m_uOrderOfArrival = 0;
 }
@@ -544,55 +616,55 @@ void CCRenderTexture::draw()
     if( m_bAutoDraw)
     {
         begin();
-		
+
         if (m_uClearFlags)
         {
             GLfloat oldClearColor[4] = {0.0f};
-			GLfloat oldDepthClearValue = 0.0f;
-			GLint oldStencilClearValue = 0;
-			
-			// backup and set
-			if (m_uClearFlags & GL_COLOR_BUFFER_BIT)
+            GLfloat oldDepthClearValue = 0.0f;
+            GLint oldStencilClearValue = 0;
+
+            // backup and set
+            if (m_uClearFlags & GL_COLOR_BUFFER_BIT)
             {
-				glGetFloatv(GL_COLOR_CLEAR_VALUE, oldClearColor);
-				glClearColor(m_sClearColor.r, m_sClearColor.g, m_sClearColor.b, m_sClearColor.a);
-			}
-			
-			if (m_uClearFlags & GL_DEPTH_BUFFER_BIT)
-            {
-				glGetFloatv(GL_DEPTH_CLEAR_VALUE, &oldDepthClearValue);
-				glClearDepth(m_fClearDepth);
-			}
-			
-			if (m_uClearFlags & GL_STENCIL_BUFFER_BIT)
-            {
-				glGetIntegerv(GL_STENCIL_CLEAR_VALUE, &oldStencilClearValue);
-				glClearStencil(m_nClearStencil);
-			}
-			
-			// clear
-			glClear(m_uClearFlags);
-			
-			// restore
-			if (m_uClearFlags & GL_COLOR_BUFFER_BIT)
-            {
-				glClearColor(oldClearColor[0], oldClearColor[1], oldClearColor[2], oldClearColor[3]);
+                glGetFloatv(GL_COLOR_CLEAR_VALUE, oldClearColor);
+                glClearColor(m_sClearColor.r, m_sClearColor.g, m_sClearColor.b, m_sClearColor.a);
             }
-			if (m_uClearFlags & GL_DEPTH_BUFFER_BIT)
+
+            if (m_uClearFlags & GL_DEPTH_BUFFER_BIT)
             {
-				glClearDepth(oldDepthClearValue);
+                glGetFloatv(GL_DEPTH_CLEAR_VALUE, &oldDepthClearValue);
+                glClearDepth(m_fClearDepth);
             }
-			if (m_uClearFlags & GL_STENCIL_BUFFER_BIT)
+
+            if (m_uClearFlags & GL_STENCIL_BUFFER_BIT)
             {
-				glClearStencil(oldStencilClearValue);
+                glGetIntegerv(GL_STENCIL_CLEAR_VALUE, &oldStencilClearValue);
+                glClearStencil(m_nClearStencil);
             }
-		}
-		
-		//! make sure all children are drawn
+
+            // clear
+            glClear(m_uClearFlags);
+
+            // restore
+            if (m_uClearFlags & GL_COLOR_BUFFER_BIT)
+            {
+                glClearColor(oldClearColor[0], oldClearColor[1], oldClearColor[2], oldClearColor[3]);
+            }
+            if (m_uClearFlags & GL_DEPTH_BUFFER_BIT)
+            {
+                glClearDepth(oldDepthClearValue);
+            }
+            if (m_uClearFlags & GL_STENCIL_BUFFER_BIT)
+            {
+                glClearStencil(oldStencilClearValue);
+            }
+        }
+
+        //! make sure all children are drawn
         sortAllChildren();
-		
-		CCObject *pElement;
-		CCARRAY_FOREACH(m_pChildren, pElement)
+
+        CCObject *pElement;
+        CCARRAY_FOREACH(m_pChildren, pElement)
         {
             CCNode *pChild = (CCNode*)pElement;
 
@@ -600,10 +672,10 @@ void CCRenderTexture::draw()
             {
                 pChild->visit();
             }
-		}
-        
+        }
+
         end();
-	}
+    }
 }
 
 bool CCRenderTexture::saveToFile(const char *szFilePath)
@@ -629,8 +701,8 @@ bool CCRenderTexture::saveToFile(const char *fileName, tCCImageFormat format)
     if (pImage)
     {
         std::string fullpath = CCFileUtils::sharedFileUtils()->getWritablePath() + fileName;
-        
-        bRet = pImage->saveToFile(fullpath.c_str(), true);
+
+        bRet = pImage->saveToFile(fullpath.c_str(), false);
     }
 
     CC_SAFE_DELETE(pImage);
@@ -656,25 +728,41 @@ CCImage* CCRenderTexture::newCCImage(bool flipImage)
     int nSavedBufferWidth = (int)s.width;
     int nSavedBufferHeight = (int)s.height;
 
-    GLubyte *pBuffer = NULL;
-    GLubyte *pTempData = NULL;
+    GLubyte *pBuffer = nullptr;
+    GLubyte *pTempData = nullptr;
     CCImage *pImage = new CCImage();
+    bool shouldReadPixels = true;
 
+#if CC_TARGET_PLATFORM == CC_PLATFORM_ANDROID
+    if (m_androidBuffer) {
+        this->begin();
+        glFinish();
+        PrivateGraphicsBufferLocker androidLocker(m_androidBuffer);
+        pTempData = androidLocker.lock();
+        shouldReadPixels = (pTempData == nullptr);
+        if (shouldReadPixels)
+            this->end();
+    }
+#endif
     do
     {
         CC_BREAK_IF(! (pBuffer = new GLubyte[nSavedBufferWidth * nSavedBufferHeight * 4]));
 
-        if(! (pTempData = new GLubyte[nSavedBufferWidth * nSavedBufferHeight * 4]))
-        {
-            delete[] pBuffer;
-            pBuffer = NULL;
-            break;
-        }
+        if (shouldReadPixels) {
+            if(! (pTempData = new GLubyte[nSavedBufferWidth * nSavedBufferHeight * 4]))
+            {
+                delete[] pBuffer;
+                pBuffer = NULL;
+                break;
+            }
 
-        this->begin();
-        glPixelStorei(GL_PACK_ALIGNMENT, 1);
-        glReadPixels(0,0,nSavedBufferWidth, nSavedBufferHeight,GL_RGBA,GL_UNSIGNED_BYTE, pTempData);
-        this->end();
+            this->begin();
+            glPixelStorei(GL_PACK_ALIGNMENT, 1);
+            glReadPixels(0,0,nSavedBufferWidth, nSavedBufferHeight,GL_RGBA,GL_UNSIGNED_BYTE, pTempData);
+            this->end();
+        } else {
+            CCLOG("Samsung S3 tweak: now we avoid using glReadPixels.");
+        }
 
         if ( flipImage ) // -- flip is only required when saving image to file
         {
@@ -682,8 +770,8 @@ CCImage* CCRenderTexture::newCCImage(bool flipImage)
             // #640 the image read from rendertexture is dirty
             for (int i = 0; i < nSavedBufferHeight; ++i)
             {
-                memcpy(&pBuffer[i * nSavedBufferWidth * 4], 
-                       &pTempData[(nSavedBufferHeight - i - 1) * nSavedBufferWidth * 4], 
+                memcpy(&pBuffer[i * nSavedBufferWidth * 4],
+                       &pTempData[(nSavedBufferHeight - i - 1) * nSavedBufferWidth * 4],
                        nSavedBufferWidth * 4);
             }
 
@@ -693,11 +781,16 @@ CCImage* CCRenderTexture::newCCImage(bool flipImage)
         {
             pImage->initWithImageData(pTempData, nSavedBufferWidth * nSavedBufferHeight * 4, CCImage::kFmtRawData, nSavedBufferWidth, nSavedBufferHeight, 8);
         }
-        
+
     } while (0);
 
     CC_SAFE_DELETE_ARRAY(pBuffer);
-    CC_SAFE_DELETE_ARRAY(pTempData);
+    if (shouldReadPixels)
+        CC_SAFE_DELETE_ARRAY(pTempData);
+#if CC_TARGET_PLATFORM == CC_PLATFORM_ANDROID
+    if (!shouldReadPixels)
+        this->end();
+#endif
 
     return pImage;
 }
