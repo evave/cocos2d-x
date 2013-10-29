@@ -7,6 +7,9 @@
 CONFIG += cocos2d_chipmunk
 # CONFIG += cocos2d_box2d
 
-# Qt5 port is not implemented, this option reserved for future.
-CONFIG += cocos2d_native_api
-#CONFIG += cocos2d_qt_api
+# Switch to cocos2d_qt_api to use Qt 5.x as platform abstraction layer.
+# You can use Qt5 mode in development or to run own scenes editor.
+# You can use native mode in development or for deployment.
+
+#CONFIG += cocos2d_native_api
+CONFIG += cocos2d_qt_api

@@ -12,11 +12,7 @@ defineReplace(cc_files) {
     return($$files(../../$$1))
 }
 
-win32 {
-   TARGET = ../$$relative_path($${CC_ROOT}/lib/$${CC_OS_TYPE}/$${CC_BUILD_TYPE}/cocos2dx)
-} else {
-   TARGET = $${CC_ROOT}/lib/$${CC_OS_TYPE}/$${CC_BUILD_TYPE}/cocos2dx
-}
+TARGET = $$relative_path($${CC_LIB_LOCATION}/cocos2dx, $$shadowed($$PWD))
 
 OBJECTS_DIR = obj/cocos2dx/$${BUILD_TYPE}
 MOC_DIR = obj/cocos2dx/$${BUILD_TYPE}
@@ -24,6 +20,7 @@ MOC_DIR = obj/cocos2dx/$${BUILD_TYPE}
 SOURCES += \
     $$cc_files(cocos/2d/*.cpp) \
     $$cc_files(cocos/2d/*.c) \
+    $$cc_files(cocos/2d/platform/*.cpp) \
     $$cc_files(cocos/base/*.cpp) \
     $$cc_files(cocos/network/*.cpp) \
     $$cc_files(cocos/physics/*.cpp) \
@@ -77,6 +74,7 @@ win32 {
 
 HEADERS += \
     $$cc_files(cocos/2d/*.h) \
+    $$cc_files(cocos/2d/platform/*.h) \
     $$cc_files(cocos/base/*.h) \
     $$cc_files(cocos/network/*.h) \
     $$cc_files(cocos/physics/*.h) \
@@ -112,11 +110,10 @@ HEADERS += \
 cocos2d_qt_api {
     SOURCES += $$cc_files(cocos/2d/platform/qt5/*.cpp)
     HEADERS += $$cc_files(cocos/2d/platform/qt5/*.h)
+    HEADERS += $$cc_files(cocos/2d/platform/qt5/*.pch)
 }
 
 cocos2d_native_api {
-    SOURCES += $$cc_files(cocos/2d/platform/*.cpp)
-    HEADERS += $$cc_files(cocos/2d/platform/*.h)
     *linux-* {
         SOURCES += $$cc_files(cocos/2d/platform/linux/*.cpp)
         HEADERS += $$cc_files(cocos/2d/platform/linux/*.h)

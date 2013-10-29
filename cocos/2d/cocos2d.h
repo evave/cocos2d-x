@@ -178,6 +178,13 @@ THE SOFTWARE.
 	#include "platform/linux/CCStdC.h"
 #endif // CC_TARGET_PLATFORM == CC_PLATFORM_LINUX
 
+#if (CC_TARGET_PLATFORM == CC_PLATFORM_QT5)
+    #include "platform/qt5/CCApplication.h"
+    #include "platform/qt5/CCEGLView.h"
+    #include "platform/qt5/CCGL.h"
+    #include "platform/qt5/CCStdC.h"
+#endif // CC_TARGET_PLATFORM == CC_PLATFORM_LINUX
+
 // script_support
 #include "CCScriptSupport.h"
 

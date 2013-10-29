@@ -143,7 +143,7 @@ public:
         const char *    fontName = 0,
         int             size = 0);
     
-    #if (CC_TARGET_PLATFORM == CC_PLATFORM_ANDROID) || (CC_TARGET_PLATFORM == CC_PLATFORM_IOS)
+    #if (CC_TARGET_PLATFORM == CC_PLATFORM_ANDROID) || (CC_TARGET_PLATFORM == CC_PLATFORM_IOS) || (CC_TARGET_PLATFORM == CC_PLATFORM_QT5)
     
         bool initWithStringShadowStroke(
                                             const char *    pText,

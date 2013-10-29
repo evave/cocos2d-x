@@ -1,0 +1,25 @@
+
+cocos2d_qt_api {
+    DEFINES += CC_TARGET_QT5
+    INCLUDEPATH += $${CC_ROOT}/cocos/2d/platform/qt5
+    # Sensors module needed for CCAccelerometer
+    QT += sensors
+    # CocosDenshion (audio library)
+    QT += multimedia
+    # Font effects.
+    QT += widgets
+
+    CONFIG += no_keywords
+
+    CC_EXTERNAL_LIBS += \
+        -lfontconfig -lfreetype \
+        -ljpeg -ltiff -lpng -lcurl -lpthread -lGL \
+        -lmpg123 -logg -lvorbis -lvorbisfile -lopenal -lalut \
+        $$cc_prebuilt_library(webp)
+
+    export(CC_EXTERNAL_LIBS)
+
+    CONFIG += precompile_header
+    PRECOMPILED_HEADER += $${CC_ROOT}/cocos/2d/platform/qt5/Cocos2dPrefix.pch
+    export(PRECOMPILED_HEADER)
+}
